@@ -15,6 +15,7 @@ function limited(ip) {
 }
 
 function buildPrompt({ spec, users, goal }) {
+  const lang = /[\u3400-\u9fff]/.test(spec + users + goal) ? "Traditional Chinese (繁體中文)" : "English";
   return `You are a senior product designer stress-testing a flow before it is designed. Be specific to THIS flow. Do not give generic UX advice (no "make it accessible", "add loading spinners" unless tied to a concrete moment here).
 
 First, restate the flow as 3 to 7 short steps, the way a user experiences it.
@@ -34,7 +35,7 @@ For each scenario give:
 - "why": one short sentence on why it is worth the designer's attention
 - "question": one question the designer must answer to handle it
 
-These are possibilities for the designer to judge, not requirements; do not assume every one must be solved. Order scenarios by severity. Do not invent features the flow does not mention; point out the gap instead. Write in the same language as the flow.
+These are possibilities for the designer to judge, not requirements; do not assume every one must be solved. Order scenarios by severity. Do not invent features the flow does not mention; point out the gap instead.
 
 USERS: ${users || "(not given)"}
 GOOD OUTCOME: ${goal || "(not given)"}
@@ -42,6 +43,8 @@ FLOW SPEC:
 """
 ${spec}
 """
+
+Write every text value (steps, title, scenario, why, question) in ${lang}. Keep the JSON keys and the "kind" and "severity" values in English.
 
 Reply with only this JSON and nothing else:
 {"steps":["..."],"scenarios":[{"step":1,"kind":"edge","severity":"high","title":"...","scenario":"...","why":"...","question":"..."}]}`;
