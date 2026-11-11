@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flow Stress Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: spec input on top, then the flow as AI read it (a step rail), then scenario cards pinned to steps for triage. */
+:root {
+  --bg: #F4F5F2; --surface: #FFFFFF; --line: #DADDD5; --ink: #1D211B; --muted: #5E6559;
+  --accent: #2F6B4F; --accent-soft: #E3EFE8; --on-accent: #FFFFFF;
+  --high: #B3261E; --high-bg: #FCEBE9; --med: #95600A; --med-bg: #FCF1DC; --low: #4F5A66; --low-bg: #ECEFF2;
+  --f-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121512; --surface: #1A1E1A; --line: #2D332C; --ink: #E6EAE3; --muted: #9CA597;
+  --accent: #7FCFA4; --accent-soft: #1F3328; --on-accent: #0F1511;
+  --high: #FF8A80; --high-bg: #3A1F1D; --med: #F0B65A; --med-bg: #362A14; --low: #A9B4BF; --low-bg: #232A30;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #121512; --surface: #1A1E1A; --line: #2D332C; --ink: #E6EAE3; --muted: #9CA597;
+  --accent: #7FCFA4; --accent-soft: #1F3328; --on-accent: #0F1511;
+  --high: #FF8A80; --high-bg: #3A1F1D; --med: #F0B65A; --med-bg: #362A14; --low: #A9B4BF; --low-bg: #232A30;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 56px; }
+.wrap { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-family: var(--f-display); font-size: 28px; margin: 0; letter-spacing: -0.01em; }
+.tag { color: var(--muted); margin: 4px 0 0; max-width: 64ch; }
+h2 { font-family: var(--f-display); font-size: 17px; margin: 0; }
+.label { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.pane { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+textarea, input[type=text] { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; width: 100%; }
+textarea { min-height: 150px; resize: vertical; line-height: 1.55; }
+.row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+@media (max-width: 720px) { .row2 { grid-template-columns: 1fr; } }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+button { font: inherit; cursor: pointer; }
+.btn { font-weight: 600; border-radius: 8px; padding: 9px 16px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn:disabled { opacity: .55; cursor: wait; }
+.btn.small { font-size: 13px; padding: 5px 10px; font-weight: 500; }
+button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.status { color: var(--muted); font-size: 13px; }
+.err { color: var(--high); margin: 0; }
+.empty { border: 1px dashed var(--line); border-radius: 10px; padding: 22px; color: var(--muted); text-align: center; }
+
+/* flow rail */
+.rail { display: flex; gap: 0; overflow-x: auto; padding-bottom: 4px; }
+.step { flex: 1 0 150px; min-width: 150px; position: relative; padding: 0 10px 0 0; }
+.step button { width: 100%; text-align: left; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 4px; height: 100%; }
+.step button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.step .n { font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.step .t { font-weight: 600; font-size: 14px; line-height: 1.3; }
+.step .c { font-family: var(--f-mono); font-size: 11px; display: flex; gap: 6px; flex-wrap: wrap; }
+.dot { padding: 1px 6px; border-radius: 999px; }
+.d-high { color: var(--high); background: var(--high-bg); } .d-med { color: var(--med); background: var(--med-bg); } .d-low { color: var(--low); background: var(--low-bg); }
+
+/* coverage bar */
+.cover { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 13px; color: var(--muted); }
+.bar { flex: 1 1 200px; height: 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; display: flex; }
+.bar span { height: 100%; }
+.b-design { background: var(--accent); } .b-scope { background: var(--muted); opacity: .5; }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+
+/* cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: var(--surface); }
+.card.done { opacity: .55; }
+.card .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sev { font-family: var(--f-mono); font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+.kind { font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.at { font-family: var(--f-mono); font-size: 11px; color: var(--accent); margin-left: auto; }
+.card h3 { font-size: 15px; margin: 0; line-height: 1.35; }
+.card p { margin: 0; font-size: 14px; }
+.card .trig { font-size: 13px; color: var(--muted); }
+.card .q { font-size: 14px; padding: 8px 10px; background: var(--bg); border-radius: 6px; }
+.card .q b { font-weight: 600; }
+.triage { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+.triage button { font-size: 13px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.triage button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+@media (prefers-reduced-motion: no-preference) { .card { animation: rise .25s ease both; } @keyframes rise { from { transform: translateY(4px); opacity: .6 } } }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <h1>Flow Stress Test</h1>
+    <p class="tag">AI tools turn a spec into screens but leave the states, edge cases and stuck moments to you. Paste a flow and see where it breaks before you design it.</p>
+  </header>
+
+  <section class="pane" aria-labelledby="inH">
+    <div class="actions" style="justify-content:space-between">
+      <h2 id="inH">Your flow</h2>
+      <div class="filters" aria-label="Examples">
+        <span class="label" style="align-self:center">Examples</span>
+        <button class="chip" type="button" data-ex="stubhub">StubHub transfer</button>
+        <button class="chip" type="button" data-ex="kumiki">Kumiki lesson</button>
+        <button class="chip" type="button" data-ex="split">Bill splitting</button>
+      </div>
+    </div>
+    <div class="field">
+      <label class="label" for="spec">What the feature does, step by step</label>
+      <textarea id="spec"></textarea>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label class="label" for="users">Who uses it</label>
+        <input type="text" id="users">
+      </div>
+      <div class="field">
+        <label class="label" for="goal">What a good outcome looks like</label>
+        <input type="text" id="goal">
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="runBtn" type="button">Stress test this flow</button>
+      <span class="status" id="status"></span>
+    </div>
+  </section>
+
+  <section class="pane" aria-labelledby="flowH">
+    <div class="actions" style="justify-content:space-between">
+      <h2 id="flowH">The flow, as the AI read it</h2>
+      <span class="label">Tap a step to filter</span>
+    </div>
+    <div id="rail"><div class="empty">Run a test to see your flow broken into steps, with how many problems sit at each one.</div></div>
+  </section>
+
+  <section class="pane" aria-labelledby="scH">
+    <div class="actions" style="justify-content:space-between">
+      <h2 id="scH">Where it breaks</h2>
+      <div class="filters" id="filters"></div>
+    </div>
+    <div class="cover" id="cover"></div>
+    <div id="cards"><div class="empty">Scenarios appear here: edge cases, failures, waiting states, moments where people get stuck, and assumptions worth challenging. Decide what to do with each.</div></div>
+    <div class="actions" id="exportRow" hidden>
+      <button class="btn small" id="copyBtn" type="button">Copy design checklist</button>
+      <span class="status">Copies the scenarios you chose to design for.</span>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const EXAMPLES = {
+    kumiki: {
+      spec: `Kumiki grammar lesson (Japanese learning app)
+
+1. Learner opens Lesson 1. A warm-up question asks them to build a sentence with は. If they get it right and say they knew why, they can skip to Lesson 2.
+2. A rule card explains one particle: word + particle = a colored chunk (は = topic, blue).
+3. Learner practices right away: pick the right particle for a word, then build a full sentence by tapping tiles.
+4. On a wrong answer, feedback explains what the chosen particle would mean, and links back to the rule card.
+5. After 5 exercises, the lesson ends with a summary of the particles learned.`,
+      users: "Adult beginners learning Japanese on their phone, some with a bit of prior Japanese",
+      goal: "Learner can explain why a particle is used, not just pick the right tile"
+    },
+    split: {
+      spec: `Group bill splitting in a payments app
+
+1. One person pays the restaurant bill and opens "Split a bill".
+2. They take a photo of the receipt. The app reads the items and prices.
+3. They add friends from contacts and assign each item to one or more people. Tax and tip are split proportionally.
+4. Each friend gets a request with their amount and can pay in the app.
+5. The payer sees who has paid and can send a reminder.`,
+      users: "Friends and coworkers sharing meals, not all of them use the app",
+      goal: "Everyone pays their fair share without awkward follow-ups"
+    }
+  };
+  const EX = {
+    spec: `Ticket transfer waiting screen (StubHub redesign)
+
+1. Buyer purchases a resale ticket. The seller has to transfer it from their own ticket account.
+2. Order page shows "Waiting for seller to transfer" with an estimated delivery date.
+3. When the seller transfers, the buyer gets an email and accepts the ticket in the official ticketing app.
+4. If the ticket has not arrived 48 hours before the event, the buyer can choose to keep waiting or find replacement tickets through StubHub's guarantee.
+5. Buyer shows the ticket at the venue entrance.`,
+    users: "Fans buying resale concert tickets, some traveling to the event",
+    goal: "Buyer feels informed and gets into the event, or gets a fair replacement in time"
+  };
+  const KIND = { edge: "Edge case", failure: "Failure", waiting: "Waiting / empty state", stuck: "Stuck point", assumption: "Assumption to challenge" };
+  const KEY = "flow-stress-v1";
+  const $ = id => document.getElementById(id);
+  let S = load() || { spec: EX.spec, users: EX.users, goal: EX.goal };
+  let result = null; let stepFilter = null; let kindFilter = null;
+
+  function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
+
+  function copyFor(code) {
+    return ({ rate_limited: "Too many runs in a short time. Wait a bit and try again.",
+      too_long: "The flow description is too long. Shorten it.",
+      bad_output: "The answer came back in an unexpected shape. Run it again.",
+      no_key: "The server has no API key yet. Add ANTHROPIC_API_KEY in Vercel." })[code] || "The test failed. Try again in a moment.";
+  }
+
+  async function run() {
+    if (!S.spec.trim()) { $("status").textContent = "Describe the flow first."; return; }
+    const btn = $("runBtn"); btn.disabled = true; $("status").textContent = "Walking through the flow and looking for where it breaks…";
+    try {
+      const res = await fetch("/api/stress", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ spec: S.spec, users: S.users, goal: S.goal }) });
+      const raw = await res.json().catch(() => ({ error: "bad_output" }));
+      if (!res.ok) throw { code: raw.error };
+      const steps = (Array.isArray(raw?.steps) ? raw.steps : []).map(String).slice(0, 8);
+      const sev = { high: 0, med: 1, low: 2 };
+      const scen = (Array.isArray(raw?.scenarios) ? raw.scenarios : [])
+        .filter(s => s && s.title && KIND[s.kind] && sev[s.severity] != null)
+        .map((s, i) => ({ i, step: Math.min(Math.max(parseInt(s.step) || 1, 1), Math.max(steps.length, 1)), kind: s.kind, severity: s.severity,
+          title: String(s.title), scenario: String(s.scenario || ""), trigger: String(s.trigger || ""), question: String(s.question || ""), triage: null }))
+        .sort((a, b) => sev[a.severity] - sev[b.severity]);
+      result = { steps, scen }; stepFilter = null; kindFilter = null;
+      const hi = scen.filter(s => s.severity === "high").length;
+      $("status").textContent = `${scen.length} scenarios across ${steps.length} steps, ${hi} high severity.`;
+    } catch (e) { $("status").textContent = copyFor(e?.code); btn.disabled = false; return; }
+    btn.disabled = false; render();
+  }
+
+  function render() {
+    renderRail(); renderFilters(); renderCover(); renderCards();
+    $("exportRow").hidden = !result || !result.scen.some(s => s.triage === "design");
+  }
+  function renderRail() {
+    const R = $("rail"); if (!result) return; R.replaceChildren();
+    const rail = document.createElement("div"); rail.className = "rail";
+    result.steps.forEach((t, idx) => {
+      const n = idx + 1; const here = result.scen.filter(s => s.step === n);
+      const wrap = document.createElement("div"); wrap.className = "step";
+      const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-pressed", String(stepFilter === n));
+      b.onclick = () => { stepFilter = stepFilter === n ? null : n; render(); };
+      const nn = document.createElement("span"); nn.className = "n"; nn.textContent = "Step " + n;
+      const tt = document.createElement("span"); tt.className = "t"; tt.textContent = t;
+      const cc = document.createElement("span"); cc.className = "c";
+      ["high", "med", "low"].forEach(k => { const c = here.filter(s => s.severity === k).length; if (c) { const d = document.createElement("span"); d.className = "dot d-" + k; d.textContent = c + " " + k; cc.append(d); } });
+      if (!here.length) cc.textContent = "no issues found";
+      b.append(nn, tt, cc); wrap.append(b); rail.append(wrap);
+    });
+    R.append(rail);
+  }
+  function renderFilters() {
+    const F = $("filters"); F.replaceChildren(); if (!result) return;
+    [["all", "All"], ...Object.entries(KIND)].forEach(([k, l]) => {
+      const n = k === "all" ? result.scen.length : result.scen.filter(s => s.kind === k).length; if (!n) return;
+      const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = l + " " + n;
+      b.setAttribute("aria-pressed", String((kindFilter || "all") === k));
+      b.onclick = () => { kindFilter = k === "all" ? null : k; render(); }; F.append(b);
+    });
+  }
+  function renderCover() {
+    const C = $("cover"); C.replaceChildren(); if (!result || !result.scen.length) return;
+    const tot = result.scen.length, d = result.scen.filter(s => s.triage === "design").length, o = result.scen.filter(s => s.triage && s.triage !== "design").length;
+    const bar = document.createElement("div"); bar.className = "bar";
+    const a = document.createElement("span"); a.className = "b-design"; a.style.width = (d / tot * 100) + "%";
+    const b = document.createElement("span"); b.className = "b-scope"; b.style.width = (o / tot * 100) + "%";
+    bar.append(a, b);
+    const t = document.createElement("span"); t.textContent = `${d} to design for · ${o} set aside · ${tot - d - o} undecided`;
+    C.append(bar, t);
+  }
+  function renderCards() {
+    const W = $("cards"); if (!result) return; W.replaceChildren();
+    let list = result.scen; if (stepFilter) list = list.filter(s => s.step === stepFilter); if (kindFilter) list = list.filter(s => s.kind === kindFilter);
+    if (!list.length) { W.innerHTML = '<div class="empty">Nothing here with these filters.</div>'; return; }
+    const g = document.createElement("div"); g.className = "cards";
+    list.forEach(s => {
+      const c = document.createElement("article"); c.className = "card" + (s.triage && s.triage !== "design" ? " done" : "");
+      const top = document.createElement("div"); top.className = "top";
+      const sv = document.createElement("span"); sv.className = "sev d-" + s.severity; sv.textContent = s.severity;
+      const kd = document.createElement("span"); kd.className = "kind"; kd.textContent = KIND[s.kind];
+      const at = document.createElement("span"); at.className = "at"; at.textContent = "Step " + s.step;
+      top.append(sv, kd, at);
+      const h = document.createElement("h3"); h.textContent = s.title;
+      const p = document.createElement("p"); p.textContent = s.scenario;
+      c.append(top, h, p);
+      if (s.trigger) { const tr = document.createElement("p"); tr.className = "trig"; tr.textContent = "Left open by: " + s.trigger; c.append(tr); }
+      if (s.question) { const q = document.createElement("p"); q.className = "q"; const b = document.createElement("b"); b.textContent = "Decide: "; q.append(b, document.createTextNode(s.question)); c.append(q); }
+      const tg = document.createElement("div"); tg.className = "triage";
+      [["design", "Design for it"], ["scope", "Out of scope"], ["unlikely", "Not realistic"]].forEach(([k, l]) => {
+        const b = document.createElement("button"); b.type = "button"; b.textContent = l; b.setAttribute("aria-pressed", String(s.triage === k));
+        b.onclick = () => { s.triage = s.triage === k ? null : k; render(); }; tg.append(b);
+      });
+      c.append(tg); g.append(c);
+    });
+    W.append(g);
+  }
+
+  $("spec").value = S.spec; $("users").value = S.users; $("goal").value = S.goal;
+  ["spec", "users", "goal"].forEach(k => $(k).addEventListener("input", e => { S[k] = e.target.value; save(); }));
+  $("runBtn").onclick = run;
+  EXAMPLES.stubhub = { spec: EX.spec, users: EX.users, goal: EX.goal };
+  document.querySelectorAll("[data-ex]").forEach(b => b.addEventListener("click", () => {
+    const e = EXAMPLES[b.dataset.ex]; S = { spec: e.spec, users: e.users, goal: e.goal }; save();
+    $("spec").value = S.spec; $("users").value = S.users; $("goal").value = S.goal;
+    result = null; stepFilter = null; kindFilter = null; $("status").textContent = "";
+    $("rail").innerHTML = '<div class="empty">Run a test to see your flow broken into steps, with how many problems sit at each one.</div>';
+    $("filters").replaceChildren(); $("cover").replaceChildren(); $("exportRow").hidden = true;
+    $("cards").innerHTML = '<div class="empty">Scenarios appear here. Decide what to do with each.</div>';
+  }));
+  $("copyBtn").onclick = () => {
+    const items = result.scen.filter(s => s.triage === "design");
+    const t = "Design checklist\n\n" + items.map(s => `- [Step ${s.step}] ${s.title}: ${s.question}`).join("\n");
+    const b = $("copyBtn");
+    try { navigator.clipboard.writeText(t).then(() => { b.textContent = "Copied"; setTimeout(() => b.textContent = "Copy design checklist", 1500); }, () => { b.textContent = "Copy not allowed here"; }); } catch { b.textContent = "Copy not allowed here"; }
+  };
+})();
+</script>
+
+</body>
+</html>
