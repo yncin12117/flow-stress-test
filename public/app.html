@@ -92,6 +92,15 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
 .triage { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
 .triage button { font-size: 13px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
 .triage button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.stage { display: flex; gap: 10px; align-items: baseline; }
+.stage .num { font-family: var(--f-mono); font-size: 12px; color: var(--on-accent); background: var(--accent); border-radius: 999px; padding: 2px 8px; }
+.loop { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+.loop span { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 10px; }
+.loop b { color: var(--accent); font-family: var(--f-mono); font-weight: 500; margin-right: 4px; }
+.prompt { font-family: var(--f-mono); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 14px; max-height: 420px; overflow: auto; margin: 0; }
+.picked { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.picked li { font-size: 14px; display: flex; gap: 8px; align-items: baseline; }
+.picked .at { margin-left: 0; }
 @media (prefers-reduced-motion: no-preference) { .card { animation: rise .25s ease both; } @keyframes rise { from { transform: translateY(4px); opacity: .6 } } }
 </style>
 </head>
@@ -101,12 +110,13 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
 <div class="wrap">
   <header>
     <h1>Flow Stress Test</h1>
-    <p class="tag">AI tools turn a spec into screens but leave the states, edge cases and stuck moments to you. Paste a flow and see where it breaks before you design it.</p>
+    <p class="tag">AI-generated flows usually cover the happy path. Check yours before the next round of generation, choose the scenarios that matter, and take them back to your AI tool as a better prompt.</p>
+    <div class="loop" aria-label="How it works"><span><b>1</b>Find what I missed</span><span><b>2</b>Decide what matters</span><span><b>3</b>Bring it into the next iteration</span></div>
   </header>
 
   <section class="pane" aria-labelledby="inH">
     <div class="actions" style="justify-content:space-between">
-      <h2 id="inH">Your flow</h2>
+      <h2 id="inH" class="stage"><span class="num">1</span>Find what I missed</h2>
       <div class="filters" aria-label="Examples">
         <span class="label" style="align-self:center">Examples</span>
         <button class="chip" type="button" data-ex="stubhub">StubHub transfer</button>
@@ -115,7 +125,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
       </div>
     </div>
     <div class="field">
-      <label class="label" for="spec">What the feature does, step by step</label>
+      <label class="label" for="spec">Paste the user flow your AI tool generated</label>
       <textarea id="spec"></textarea>
     </div>
     <div class="row2">
@@ -136,7 +146,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
 
   <section class="pane" aria-labelledby="flowH">
     <div class="actions" style="justify-content:space-between">
-      <h2 id="flowH">The flow, as the AI read it</h2>
+      <h2 id="flowH">Your flow, step by step</h2>
       <span class="label">Tap a step to filter</span>
     </div>
     <div id="rail"><div class="empty">Run a test to see your flow broken into steps, with how many problems sit at each one.</div></div>
@@ -144,15 +154,23 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
 
   <section class="pane" aria-labelledby="scH">
     <div class="actions" style="justify-content:space-between">
-      <h2 id="scH">Where it breaks</h2>
+      <h2 id="scH" class="stage"><span class="num">2</span>Decide what matters</h2>
       <div class="filters" id="filters"></div>
     </div>
     <div class="cover" id="cover"></div>
-    <div id="cards"><div class="empty">Scenarios appear here: edge cases, failures, waiting states, moments where people get stuck, and assumptions worth challenging. Decide what to do with each.</div></div>
-    <div class="actions" id="exportRow" hidden>
-      <button class="btn small" id="copyBtn" type="button">Copy design checklist</button>
-      <span class="status">Copies the scenarios you chose to design for.</span>
+    <p class="status" style="margin:0">Not every scenario needs a fix. Mark the ones worth designing for in your next iteration.</p>
+    <div id="cards"><div class="empty">Scenarios appear here: edge cases, error states, waiting states, user confusion and potential failures, each pinned to a step.</div></div>
+  </section>
+
+  <section class="pane" aria-labelledby="exH">
+    <h2 id="exH" class="stage"><span class="num">3</span>Bring it into the next iteration</h2>
+    <p class="status" style="margin:0">Your original flow and the scenarios you chose, written as a prompt for Claude, ChatGPT or Figma Make.</p>
+    <div id="pickedWrap"></div>
+    <div class="actions">
+      <button class="btn primary" id="copyBtn" type="button" disabled>Copy Enhanced Prompt</button>
+      <span class="status" id="copyStatus"></span>
     </div>
+    <pre class="prompt" id="promptOut" aria-label="Enhanced design prompt preview"></pre>
   </section>
 </div>
 
@@ -193,7 +211,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
     users: "Fans buying resale concert tickets, some traveling to the event",
     goal: "Buyer feels informed and gets into the event, or gets a fair replacement in time"
   };
-  const KIND = { edge: "Edge case", failure: "Failure", waiting: "Waiting / empty state", stuck: "Stuck point", assumption: "Assumption to challenge" };
+  const KIND = { edge: "Edge case", error: "Error state", waiting: "Waiting state", confusion: "User confusion", failure: "Potential failure" };
   const KEY = "flow-stress-v1";
   const $ = id => document.getElementById(id);
   let S = load() || { spec: EX.spec, users: EX.users, goal: EX.goal };
@@ -221,7 +239,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
       const scen = (Array.isArray(raw?.scenarios) ? raw.scenarios : [])
         .filter(s => s && s.title && KIND[s.kind] && sev[s.severity] != null)
         .map((s, i) => ({ i, step: Math.min(Math.max(parseInt(s.step) || 1, 1), Math.max(steps.length, 1)), kind: s.kind, severity: s.severity,
-          title: String(s.title), scenario: String(s.scenario || ""), trigger: String(s.trigger || ""), question: String(s.question || ""), triage: null }))
+          title: String(s.title), scenario: String(s.scenario || ""), why: String(s.why || ""), question: String(s.question || ""), triage: null }))
         .sort((a, b) => sev[a.severity] - sev[b.severity]);
       result = { steps, scen }; stepFilter = null; kindFilter = null;
       const hi = scen.filter(s => s.severity === "high").length;
@@ -230,9 +248,47 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
     btn.disabled = false; render();
   }
 
+  function buildPrompt() {
+    const picked = result ? result.scen.filter(x => x.triage === "design").sort((a, b) => a.step - b.step) : [];
+    const skipped = result ? result.scen.filter(x => x.triage === "scope" || x.triage === "unlikely") : [];
+    const stepName = n => (result && result.steps[n - 1]) ? ` (${result.steps[n - 1]})` : "";
+    let t = "Update the following user flow to address additional scenarios.\n\n";
+    t += "ORIGINAL FLOW\n" + (S.spec.trim() || "(paste your flow)") + "\n";
+    if (S.users.trim()) t += "\nUSERS\n" + S.users.trim() + "\n";
+    if (S.goal.trim()) t += "\nGOAL\n" + S.goal.trim() + "\n";
+    t += "\nADDITIONAL SCENARIOS TO ADDRESS\n";
+    t += picked.length ? picked.map(x => `- Step ${x.step}${stepName(x.step)} · ${KIND[x.kind]} · ${x.severity}\n  ${x.title}: ${x.scenario}\n  Open question: ${x.question}`).join("\n") : "(none selected yet)";
+    t += "\n";
+    if (skipped.length) t += "\nOUT OF SCOPE (do not design for these)\n" + skipped.map(x => `- ${x.title}`).join("\n") + "\n";
+    t += `
+INSTRUCTIONS
+- Keep the original flow and its main logic. Do not redesign the product or add unrelated features.
+- For each scenario above, add what the flow needs at the step listed: alternative paths, error states, recovery options, or UI states.
+- Show the updated flow step by step, and mark clearly what is new compared with the original.
+- Where the flow or scenario does not give enough information to decide (timing, rules, policies, who is responsible), do not assume. List these as questions for me to confirm.`;
+    return t;
+  }
+
+  function renderPrompt() {
+    const picked = result ? result.scen.filter(x => x.triage === "design").sort((a, b) => a.step - b.step) : [];
+    const W = $("pickedWrap"); W.replaceChildren();
+    if (!picked.length) {
+      const e = document.createElement("div"); e.className = "empty";
+      e.textContent = result ? "Mark at least one scenario as \"Design for it\" to add it to your prompt." : "Run a stress test, then choose the scenarios you want in your next iteration.";
+      W.append(e);
+    } else {
+      const ul = document.createElement("ul"); ul.className = "picked";
+      picked.forEach(x => { const li = document.createElement("li"); const a = document.createElement("span"); a.className = "at"; a.textContent = "Step " + x.step; const sv = document.createElement("span"); sv.className = "sev d-" + x.severity; sv.textContent = x.severity; const t = document.createElement("span"); t.textContent = x.title; li.append(a, sv, t); ul.append(li); });
+      W.append(ul);
+    }
+    $("copyBtn").disabled = !picked.length;
+    if (!picked.length) $("copyStatus").textContent = "";
+    $("promptOut").textContent = buildPrompt();
+  }
+
   function render() {
     renderRail(); renderFilters(); renderCover(); renderCards();
-    $("exportRow").hidden = !result || !result.scen.some(s => s.triage === "design");
+    renderPrompt();
   }
   function renderRail() {
     const R = $("rail"); if (!result) return; R.replaceChildren();
@@ -285,7 +341,7 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
       const h = document.createElement("h3"); h.textContent = s.title;
       const p = document.createElement("p"); p.textContent = s.scenario;
       c.append(top, h, p);
-      if (s.trigger) { const tr = document.createElement("p"); tr.className = "trig"; tr.textContent = "Left open by: " + s.trigger; c.append(tr); }
+      if (s.why) { const tr = document.createElement("p"); tr.className = "trig"; tr.textContent = "Why it matters: " + s.why; c.append(tr); }
       if (s.question) { const q = document.createElement("p"); q.className = "q"; const b = document.createElement("b"); b.textContent = "Decide: "; q.append(b, document.createTextNode(s.question)); c.append(q); }
       const tg = document.createElement("div"); tg.className = "triage";
       [["design", "Design for it"], ["scope", "Out of scope"], ["unlikely", "Not realistic"]].forEach(([k, l]) => {
@@ -306,15 +362,18 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px
     $("spec").value = S.spec; $("users").value = S.users; $("goal").value = S.goal;
     result = null; stepFilter = null; kindFilter = null; $("status").textContent = "";
     $("rail").innerHTML = '<div class="empty">Run a test to see your flow broken into steps, with how many problems sit at each one.</div>';
-    $("filters").replaceChildren(); $("cover").replaceChildren(); $("exportRow").hidden = true;
+    $("filters").replaceChildren(); $("cover").replaceChildren();
     $("cards").innerHTML = '<div class="empty">Scenarios appear here. Decide what to do with each.</div>';
+    renderPrompt();
   }));
   $("copyBtn").onclick = () => {
-    const items = result.scen.filter(s => s.triage === "design");
-    const t = "Design checklist\n\n" + items.map(s => `- [Step ${s.step}] ${s.title}: ${s.question}`).join("\n");
-    const b = $("copyBtn");
-    try { navigator.clipboard.writeText(t).then(() => { b.textContent = "Copied"; setTimeout(() => b.textContent = "Copy design checklist", 1500); }, () => { b.textContent = "Copy not allowed here"; }); } catch { b.textContent = "Copy not allowed here"; }
+    const t = buildPrompt(); const b = $("copyBtn");
+    const done = () => { $("copyStatus").textContent = "Copied. Paste it into your AI tool."; };
+    const fb = () => { const r = document.createRange(); r.selectNodeContents($("promptOut")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); $("copyStatus").textContent = "Selected. Press Cmd+C to copy."; };
+    try { navigator.clipboard.writeText(t).then(done, fb); } catch { fb(); }
   };
+  ["spec", "users", "goal"].forEach(k => $(k).addEventListener("input", renderPrompt));
+  renderPrompt();
 })();
 </script>
 
